@@ -1,7 +1,7 @@
 /** @license
  *
  * jsPDF - PDF Document creation from JavaScript
- * Version 3.0.3 Built on 2025-09-18T08:03:54.260Z
+ * Version 3.0.3 Built on 2025-11-08T15:20:54.579Z
  *                      CommitID 00000000
  *
  * Copyright (c) 2010-2025 James Hall <james@parall.ax>, https://github.com/MrRio/jsPDF
@@ -5945,7 +5945,9 @@
       getEncryptor: getEncryptor,
       output: output,
       getNumberOfPages: getNumberOfPages,
-      pages: pages,
+      get pages() {
+        return pages;
+      },
       out: out,
       f2: f2,
       f3: f3,
@@ -10488,7 +10490,7 @@
       if (arguments[0] instanceof Cell) {
         currentCell = arguments[0];
       } else {
-        currentCell = new Cell(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5]);
+        currentCell = new Cell(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6]);
       }
       _initialize.call(this);
       var lastCell = this.internal.__cell__.lastCell;
@@ -11493,11 +11495,16 @@
         }
       });
       var _fontFaceMap = null;
+      var _cachedFontList = null;
       function getFontFaceMap(pdf, fontFaces) {
-        if (_fontFaceMap === null) {
-          var fontMap = pdf.getFontList();
-          var convertedFontFaces = convertToFontFaces(fontMap);
+        var currentFontMap = pdf.getFontList();
+
+        // Check if the font list has changed by comparing the JSON representation
+        var currentFontMapString = JSON.stringify(currentFontMap);
+        if (_fontFaceMap === null || _cachedFontList !== currentFontMapString) {
+          var convertedFontFaces = convertToFontFaces(currentFontMap);
           _fontFaceMap = buildFontFaceMap(convertedFontFaces.concat(fontFaces));
+          _cachedFontList = currentFontMapString;
         }
         return _fontFaceMap;
       }
@@ -11562,6 +11569,7 @@
         },
         set: function set(value) {
           _fontFaceMap = null;
+          _cachedFontList = null;
           _fontFaces = value;
         }
       });
@@ -12516,16 +12524,16 @@
       matrix = matrix.multiply(decomposedTransformationMatrix.skew);
       matrix = matrix.multiply(decomposedTransformationMatrix.scale);
       var xRect = matrix.applyToRectangle(new Rectangle(x - sx * clipFactorX, y - sy * clipFactorY, swidth * factorX, sheight * factorY));
-      var pageArray = getPagesByPath.call(this, xRect);
-      var pages = [];
-      for (var ii = 0; ii < pageArray.length; ii += 1) {
-        if (pages.indexOf(pageArray[ii]) === -1) {
-          pages.push(pageArray[ii]);
-        }
-      }
-      sortPages(pages);
-      var clipPath;
       if (this.autoPaging) {
+        var pageArray = getPagesByPath.call(this, xRect);
+        var pages = [];
+        for (var ii = 0; ii < pageArray.length; ii += 1) {
+          if (pages.indexOf(pageArray[ii]) === -1) {
+            pages.push(pageArray[ii]);
+          }
+        }
+        sortPages(pages);
+        var clipPath;
         var min = pages[0];
         var max = pages[pages.length - 1];
         for (var i = min; i < max + 1; i++) {
@@ -12640,28 +12648,28 @@
       var oldLineWidth = this.lineWidth;
       var lineWidth = Math.abs(oldLineWidth * this.ctx.transform.scaleX);
       var lineJoin = this.lineJoin;
-      var origPath = JSON.parse(JSON.stringify(this.path));
-      var xPath = JSON.parse(JSON.stringify(this.path));
-      var clipPath;
-      var tmpPath;
-      var pages = [];
-      for (var i = 0; i < xPath.length; i++) {
-        if (typeof xPath[i].x !== "undefined") {
-          var page = getPagesByPath.call(this, xPath[i]);
-          for (var ii = 0; ii < page.length; ii += 1) {
-            if (pages.indexOf(page[ii]) === -1) {
-              pages.push(page[ii]);
+      if (this.autoPaging) {
+        var origPath = JSON.parse(JSON.stringify(this.path));
+        var xPath = JSON.parse(JSON.stringify(this.path));
+        var clipPath;
+        var tmpPath;
+        var pages = [];
+        for (var i = 0; i < xPath.length; i++) {
+          if (typeof xPath[i].x !== "undefined") {
+            var page = getPagesByPath.call(this, xPath[i]);
+            for (var ii = 0; ii < page.length; ii += 1) {
+              if (pages.indexOf(page[ii]) === -1) {
+                pages.push(page[ii]);
+              }
             }
           }
         }
-      }
-      for (var j = 0; j < pages.length; j++) {
-        while (this.pdf.internal.getNumberOfPages() < pages[j]) {
-          addPage.call(this);
+        for (var j = 0; j < pages.length; j++) {
+          while (this.pdf.internal.getNumberOfPages() < pages[j]) {
+            addPage.call(this);
+          }
         }
-      }
-      sortPages(pages);
-      if (this.autoPaging) {
+        sortPages(pages);
         var min = pages[0];
         var max = pages[pages.length - 1];
         for (var k = min; k < max + 1; k++) {
@@ -12698,12 +12706,12 @@
           }
           this.lineWidth = oldLineWidth;
         }
+        this.path = origPath;
       } else {
         this.lineWidth = lineWidth;
         drawPaths.call(this, rule, isClip);
         this.lineWidth = oldLineWidth;
       }
-      this.path = origPath;
     };
 
     /**
@@ -12944,23 +12952,23 @@
       var yBottom = getTextBottom.call(this, yBaseLine);
       var yTop = yBottom - textDimensions.h;
       var pt = this.ctx.transform.applyToPoint(new Point(options.x, yBaseLine));
-      var decomposedTransformationMatrix = this.ctx.transform.decompose();
-      var matrix = new Matrix();
-      matrix = matrix.multiply(decomposedTransformationMatrix.translate);
-      matrix = matrix.multiply(decomposedTransformationMatrix.skew);
-      matrix = matrix.multiply(decomposedTransformationMatrix.scale);
-      var baselineRect = this.ctx.transform.applyToRectangle(new Rectangle(options.x, yBaseLine, textDimensions.w, textDimensions.h));
-      var textBounds = matrix.applyToRectangle(new Rectangle(options.x, yTop, textDimensions.w, textDimensions.h));
-      var pageArray = getPagesByPath.call(this, textBounds);
-      var pages = [];
-      for (var ii = 0; ii < pageArray.length; ii += 1) {
-        if (pages.indexOf(pageArray[ii]) === -1) {
-          pages.push(pageArray[ii]);
-        }
-      }
-      sortPages(pages);
       var clipPath, oldSize, oldLineWidth;
       if (this.autoPaging) {
+        var decomposedTransformationMatrix = this.ctx.transform.decompose();
+        var matrix = new Matrix();
+        matrix = matrix.multiply(decomposedTransformationMatrix.translate);
+        matrix = matrix.multiply(decomposedTransformationMatrix.skew);
+        matrix = matrix.multiply(decomposedTransformationMatrix.scale);
+        var baselineRect = this.ctx.transform.applyToRectangle(new Rectangle(options.x, yBaseLine, textDimensions.w, textDimensions.h));
+        var textBounds = matrix.applyToRectangle(new Rectangle(options.x, yTop, textDimensions.w, textDimensions.h));
+        var pageArray = getPagesByPath.call(this, textBounds);
+        var pages = [];
+        for (var ii = 0; ii < pageArray.length; ii += 1) {
+          if (pages.indexOf(pageArray[ii]) === -1) {
+            pages.push(pageArray[ii]);
+          }
+        }
+        sortPages(pages);
         var min = pages[0];
         var max = pages[pages.length - 1];
         for (var i = min; i < max + 1; i++) {
@@ -14018,7 +14026,7 @@
         if ((typeof exports === "undefined" ? "undefined" : _typeof(exports)) === "object" && typeof module !== "undefined") {
           return new Promise(function (resolve, reject) {
             try {
-              resolve(require("html2canvas"));
+              resolve(require("html2canvas-pro"));
             } catch (e) {
               reject(e);
             }
@@ -14027,7 +14035,7 @@
         if (typeof define === "function" && define.amd) {
           return new Promise(function (resolve, reject) {
             try {
-              require(["html2canvas"], resolve);
+              require(["html2canvas-pro"], resolve);
             } catch (e) {
               reject(e);
             }
@@ -27995,9 +28003,6 @@
       function wd(a, b, c, d, e) {
         Ga(a, b, c, d, e);
         d[e + 3] = 255;
-      }
-      function ga(a, b) {
-        return 0 > a ? 0 : a > b ? b : a;
       }
       function la(a, b, c) {
         self[a] = function (a, e, f, g, h, k, l, m, n) {
